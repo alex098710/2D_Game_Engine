@@ -164,13 +164,13 @@ def test_maintenance_purge_runs_on_the_real_schema(connection):
 def test_characters_are_seeded_with_physics_textures_and_lines(connection):
     catalog = CatalogRepository(connection)
     kinds = {row["code"]: row for row in catalog.kinds()}
-    for code in ("villager", "knight", "wizard"):
+    for code in ("villager", "knight", "wizard", "ally", "guard"):
         assert kinds[code]["category"] == "character"
         assert kinds[code]["body_type"] == "dynamic"
         assert kinds[code]["hostile"] is False
-    assert {t["code"] for t in catalog.textures()} >= {"villager", "knight", "wizard"}
+    assert {t["code"] for t in catalog.textures()} >= {"villager", "knight", "wizard", "ally", "guard"}
     said = {row["kind"] for row in catalog.character_lines()}
-    assert said == {"villager", "knight", "wizard"}
+    assert said == {"villager", "knight", "wizard", "ally", "guard"}
 
 
 def test_new_enemies_items_and_obstacles_are_seeded(connection):
