@@ -1,0 +1,26 @@
+name: keep-alive
+
+# Supabase (free plan) pauses a project after about 7 days without activity.
+# Calling /health/db every few days runs a query on the database, which keeps it
+# awake, and also wakes the Render service.
+on:
+  schedule:
+    - cron: "0 12 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    env:
+      API_URL: https://pixelforge-api-mmo6.onrender.com
+    steps:
+      - name: Call /health/db (retry while Render wakes up)
+        run: |
+          for attempt in $(seq 1 10); do
+            status=$(curl -s -o body.txt -w "%{http_code}" --max-time 60 "$API_URL/health/db" || echo 000)
+            echo "attempt $attempt: HTTP $status $(head -c 200 body.txt 2>/dev/null)"
+            if [ "$status" = "200" ]; then exit 0; fi
+            sleep 30
+          done
+          echo "::error::$API_URL/health/db did not answer 200. Check whether the Supabase project is paused."
+          exit 1
