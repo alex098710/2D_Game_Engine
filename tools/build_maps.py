@@ -1,4 +1,4 @@
-"""Turns the grids in maps/kenney/ into a migration with the ready-made maps.
+"""Turns the grids in maps/kenney/ and maps/battle/ into a migration with the ready-made maps.
 
     python tools/build_maps.py      # writes the newest map migration (see MIGRATION below)
 
@@ -20,80 +20,144 @@ KINDS = {
     "d": "dagger", "h": "hammer", "l": "spear", "t": "staff", "=": "path",
     "w": "water", "_": "bridge", ":": "sand",
     "m": "marksman", "n": "necromancer", "D": "demon", "M": "mimic", "r": "rat",
+    # war (maps/battle/)
+    "S": "soldier", "G": "grenadier", "K": "tank", "A": "artillery", "L": "legionary", "Q": "captain",
+    "y": "ally", "u": "guard", "~": "sandbag", "|": "barricade", "x": "hedgehog", "H": "bunker",
+    "W": "tower", "F": "flag", "!": "banner", "o": "rock", "-": "road", "+": "medkit", "X": "explosive",
+    "1": "pistol", "2": "rifle", "3": "shotgun", "4": "smg", "5": "sniper", "6": "launcher", "7": "grenade",
 }
-SOLID = {"wall", "tree", "bush", "fence", "water"}
+SOLID = {"wall", "tree", "bush", "fence", "water", "sandbag", "barricade", "hedgehog", "bunker", "tower",
+         "flag", "banner", "rock", "explosive"}
+# Ground characters: what goes under a person or an item standing among them.
+GROUNDS = {"=": "path", "-": "road"}
 # Things that can stand on a road: when most of their neighbours are road, a
 # road tile is put under them too, so people and coins don't sit on a hole of grass.
 ON_ROAD = {"villager", "knight", "wizard", "enemy", "bat", "spider", "ghost", "brute", "coin", "potion",
            "chest", "dagger", "hammer", "spear", "staff", "box", "barrel", "player",
-           "marksman", "necromancer", "demon", "mimic", "rat"}
+           "marksman", "necromancer", "demon", "mimic", "rat",
+           "soldier", "grenadier", "tank", "artillery", "legionary", "captain", "ally", "guard", "medkit",
+           "pistol", "rifle", "shotgun", "smg", "sniper", "launcher", "grenade"}
 
 # Migrations are history: once applied in production they never change. 088 and
 # 089 seeded the first maps; the newest migration (MIGRATION) re-seeds every map
 # with "do update", so edit the grids, point MIGRATION at a new number and run this.
-MIGRATION = "090_terrain_enemies_and_maps.sql"
+MIGRATION = "092_war_kinds_and_battle_maps.sql"
 
 MAPS = [
-    ("kenney-dungeon", "dungeon.txt", "Mazmorra (Kenney)",
+    ("kenney-dungeon", "kenney/dungeon.txt", "Mazmorra (Kenney)",
      "Mapa de ejemplo del pack Tiny Dungeon de Kenney (CC0): salas, vías y enemigos"),
-    ("kenney-kingdom", "kingdom.txt", "Reino (Kenney)",
+    ("kenney-kingdom", "kenney/kingdom.txt", "Reino (Kenney)",
      "Castillo con foso, río, aldea y bosque del 1-Bit Pack de Kenney (CC0); un demonio guarda el castillo"),
-    ("kenney-house", "house.txt", "Casa (Kenney)",
+    ("kenney-house", "kenney/house.txt", "Casa (Kenney)",
      "Interior de una casa con sus habitantes, del 1-Bit Pack de Kenney (CC0)"),
-    ("kenney-city", "city.txt", "Ciudad (Kenney)",
+    ("kenney-city", "kenney/city.txt", "Ciudad (Kenney)",
      "Una ciudad con calles, aceras, edificios, coches, un parque y un lago, del 1-Bit Pack de Kenney (CC0); "
      "recoge las monedas y limpia las calles de monstruos y arqueros"),
-    ("kenney-village", "village.txt", "Aldea (Kenney)",
+    ("kenney-village", "kenney/village.txt", "Aldea (Kenney)",
      "Aldea con casas, lago, bosque, campamento y cementerio, del Roguelike/RPG pack de Kenney (CC0); "
      "un demonio acampa al noreste"),
+    ("battle-front", "battle/front.txt", "Frente de batalla",
+     "Dos campamentos separados por un río: tu base azul al oeste y el ejército rojo al este, con "
+     "artillería, granaderos y un tanque. Cruza los puentes y vuela sus barriles"),
+    ("battle-siege", "battle/siege.txt", "Asedio al búnker",
+     "Una fortaleza de sacos terreros con torres, artillería y un tanque en el centro; "
+     "haz explotar los barriles para abrir una brecha"),
 ]
 
 # Kinds added with this migration: terrain and the enemies that shoot.
-NEW_KINDS_SQL = """-- Terrain ('water' blocks walking; 'sand' and 'bridge' are ground with no body)
--- and new enemies: two that shoot from afar, a boss, a mimic and rats.
+NEW_KINDS_SQL = """-- War: the red army (enemies), the blue army (friendly people), defences,
+-- the road, the medkit, the firearms the hero can pick up and the powder keg.
 insert into object_kinds (code, name, category, solid, movable, collectible, hostile) values
-    ('water',       'Agua',           'obstacle',   true,  false, false, false),
-    ('sand',        'Arena',          'decoration', false, false, false, false),
-    ('bridge',      'Puente',         'decoration', false, false, false, false),
-    ('marksman',    'Arquero oscuro', 'enemy',      true,  true,  false, true),
-    ('necromancer', 'Nigromante',     'enemy',      true,  true,  false, true),
-    ('demon',       'Demonio',        'enemy',      true,  true,  false, true),
-    ('mimic',       'Mímico',         'enemy',      true,  true,  false, true),
-    ('rat',         'Rata',           'enemy',      true,  true,  false, true)
+    ('soldier',   'Fusilero',          'enemy',       true,  true,  false, true),
+    ('grenadier', 'Granadero',         'enemy',       true,  true,  false, true),
+    ('tank',      'Tanque',            'enemy',       true,  true,  false, true),
+    ('artillery', 'Artillería',        'enemy',       true,  false, false, true),
+    ('legionary', 'Legionario',        'enemy',       true,  true,  false, true),
+    ('captain',   'Capitán',           'enemy',       true,  true,  false, true),
+    ('ally',      'Soldado aliado',    'decoration',  true,  true,  false, false),
+    ('guard',     'Guardia',           'decoration',  true,  true,  false, false),
+    ('sandbag',   'Sacos terreros',    'obstacle',    true,  false, false, false),
+    ('barricade', 'Barricada',         'obstacle',    true,  false, false, false),
+    ('hedgehog',  'Erizo antitanque',  'obstacle',    true,  false, false, false),
+    ('rock',      'Colina',            'obstacle',    true,  false, false, false),
+    ('bunker',    'Búnker',            'building',    true,  false, false, false),
+    ('tower',     'Torre de vigía',    'building',    true,  false, false, false),
+    ('flag',      'Bandera',           'decoration',  true,  false, false, false),
+    ('banner',    'Estandarte rojo',   'decoration',  true,  false, false, false),
+    ('road',      'Carretera',         'decoration',  false, false, false, false),
+    ('medkit',    'Botiquín',          'collectible', false, false, true,  false),
+    ('pistol',    'Pistola',           'collectible', false, false, true,  false),
+    ('rifle',     'Fusil',             'collectible', false, false, true,  false),
+    ('shotgun',   'Escopeta',          'collectible', false, false, true,  false),
+    ('smg',       'Subfusil',          'collectible', false, false, true,  false),
+    ('sniper',    'Francotirador',     'collectible', false, false, true,  false),
+    ('launcher',  'Lanzacohetes',      'collectible', false, false, true,  false),
+    ('grenade',   'Granadas',          'collectible', false, false, true,  false),
+    ('explosive', 'Barril explosivo',  'obstacle',    true,  false, false, true)
 on conflict (code) do nothing;
 
 insert into object_physics (kind, body_type, material_id, mass, drag, immovable)
 select k.kind, k.body_type, m.id, k.mass, k.drag, k.immovable
 from (values
-    ('water',       'static',  'stone', 1.0,  0,   true),
-    ('sand',        'none',    'stone', 1.0,  0,   true),
-    ('bridge',      'none',    'wood',  1.0,  0,   true),
-    ('marksman',    'dynamic', 'flesh', 1.5,  200, false),
-    ('necromancer', 'dynamic', 'flesh', 1.5,  200, false),
-    ('demon',       'dynamic', 'flesh', 12.0, 300, false),
-    ('mimic',       'dynamic', 'wood',  1.5,  200, false),
-    ('rat',         'dynamic', 'flesh', 0.5,  100, false)
+    ('soldier',   'dynamic', 'flesh', 1.5,  200, false),
+    ('grenadier', 'dynamic', 'flesh', 1.5,  200, false),
+    ('tank',      'dynamic', 'stone', 14.0, 300, false),
+    ('artillery', 'static',  'stone', 1.0,  0,   true),
+    ('legionary', 'dynamic', 'flesh', 1.5,  200, false),
+    ('captain',   'dynamic', 'flesh', 4.0,  300, false),
+    ('ally',      'dynamic', 'flesh', 1.0,  300, false),
+    ('guard',     'dynamic', 'flesh', 1.0,  300, false),
+    ('sandbag',   'static',  'stone', 1.0,  0,   true),
+    ('barricade', 'static',  'stone', 1.0,  0,   true),
+    ('hedgehog',  'static',  'stone', 1.0,  0,   true),
+    ('rock',      'static',  'stone', 1.0,  0,   true),
+    ('bunker',    'static',  'stone', 1.0,  0,   true),
+    ('tower',     'static',  'stone', 1.0,  0,   true),
+    ('flag',      'static',  'wood',  1.0,  0,   true),
+    ('banner',    'static',  'wood',  1.0,  0,   true),
+    ('road',      'none',    'stone', 1.0,  0,   true),
+    ('medkit',    'none',    'wood',  1.0,  0,   true),
+    ('pistol',    'none',    'stone', 1.0,  0,   true),
+    ('rifle',     'none',    'stone', 1.0,  0,   true),
+    ('shotgun',   'none',    'stone', 1.0,  0,   true),
+    ('smg',       'none',    'stone', 1.0,  0,   true),
+    ('sniper',    'none',    'stone', 1.0,  0,   true),
+    ('launcher',  'none',    'stone', 1.0,  0,   true),
+    ('grenade',   'none',    'stone', 1.0,  0,   true),
+    ('explosive', 'static',  'wood',  1.0,  0,   true)
 ) as k (kind, body_type, material, mass, drag, immovable)
 join physics_materials m on m.code = k.material
 on conflict (kind) do nothing;
 
 insert into textures (pack_id, code, kind, file_path, width, height, frames)
-select p.id, t.code, t.kind, 'textures/' || t.code || '.png', t.size, t.size, 1
+select p.id, t.code, t.code, 'textures/' || t.code || '.png', 32, 32, 1
 from texture_packs p
 cross join (values
-    ('water', 'water', 32), ('sand', 'sand', 32), ('bridge', 'bridge', 32), ('marksman', 'marksman', 32),
-    ('necromancer', 'necromancer', 32), ('demon', 'demon', 32), ('mimic', 'mimic', 32), ('rat', 'rat', 32)
-) as t (code, kind, size)
+    ('soldier'), ('grenadier'), ('tank'), ('artillery'), ('legionary'), ('captain'), ('ally'), ('guard'),
+    ('sandbag'), ('barricade'), ('hedgehog'), ('rock'), ('bunker'), ('tower'), ('flag'), ('banner'), ('road'),
+    ('medkit'), ('pistol'), ('rifle'), ('shotgun'), ('smg'), ('sniper'), ('launcher'), ('grenade'), ('explosive')
+) as t (code)
 where p.code = 'kenney-tiny'
 on conflict (pack_id, code) do nothing;
 
 insert into enemy_types (code, name, health, speed, damage, behavior, texture_code) values
-    ('marksman',    'Arquero oscuro', 3,  75,  1, 'patrol', 'marksman'),
-    ('necromancer', 'Nigromante',     4,  55,  1, 'patrol', 'necromancer'),
-    ('demon',       'Demonio',        30, 55,  2, 'chase',  'demon'),
-    ('mimic',       'Mímico',         5,  140, 2, 'idle',   'mimic'),
-    ('rat',         'Rata',           1,  150, 1, 'chase',  'rat')
+    ('soldier',   'Fusilero',   3,  70, 1, 'patrol', 'soldier'),
+    ('grenadier', 'Granadero',  3,  62, 1, 'patrol', 'grenadier'),
+    ('tank',      'Tanque',     25, 40, 2, 'chase',  'tank'),
+    ('artillery', 'Artillería', 6,  0,  1, 'idle',   'artillery'),
+    ('legionary', 'Legionario', 4,  88, 1, 'chase',  'legionary'),
+    ('captain',   'Capitán',    9,  52, 2, 'chase',  'captain')
 on conflict (code) do nothing;
+
+insert into character_lines (kind, line) values
+    ('ally',  '¡Cúbrete detrás de los sacos terreros!'),
+    ('ally',  'Dispara a los barriles rojos: explotan y arrasan con todo.'),
+    ('ally',  'La artillería no se mueve. Acércate rodando con Shift.'),
+    ('ally',  'Los cofres esconden pistolas, fusiles y botiquines.'),
+    ('guard', 'Nadie cruza este puente sin permiso.'),
+    ('guard', 'El tanque enemigo aguanta mucho: usa el lanzacohetes.'),
+    ('guard', 'Si oyes un silbido, aléjate: es una granada.')
+on conflict (kind, line) do nothing;
 
 """
 
@@ -108,10 +172,13 @@ def read_grid(path: Path) -> list:
     return rows
 
 
-def on_road(rows: list, col: int, row: int) -> bool:
+def on_road(rows: list, col: int, row: int):
+    """The ground kind most of the neighbours have, when at least two are road; else None."""
     around = ((col + 1, row), (col - 1, row), (col, row + 1), (col, row - 1))
-    roads = sum(1 for c, r in around if 0 <= c < COLUMNS and 0 <= r < ROWS and rows[r][c] == "=")
-    return roads >= 2
+    roads = [rows[r][c] for c, r in around if 0 <= c < COLUMNS and 0 <= r < ROWS and rows[r][c] in GROUNDS]
+    if len(roads) < 2:
+        return None
+    return GROUNDS[max(set(roads), key=roads.count)]
 
 
 def scene_of(rows: list) -> list:
@@ -127,8 +194,9 @@ def scene_of(rows: list) -> list:
             if char == ".":
                 continue
             kind = KINDS[char]
-            if kind in ON_ROAD and on_road(rows, col, row):
-                add("path", col, row)
+            ground = on_road(rows, col, row) if kind in ON_ROAD else None
+            if ground:
+                add(ground, col, row)
             add(kind, col, row)
     return objects
 
@@ -156,15 +224,15 @@ def sql_text(value: str) -> str:
 def main() -> None:
     values = []
     for code, grid_name, name, description in MAPS:
-        rows = read_grid(ROOT / "maps" / "kenney" / grid_name)
+        rows = read_grid(ROOT / "maps" / grid_name)
         check(code, rows)
         scene = scene_of(rows)
         assert len(scene) <= MAX_OBJECTS, f"{code}: {len(scene)} objects, at most {MAX_OBJECTS}"
         print(f"{code:15} {len(scene):4} objects")
         values.append(f"    ({sql_text(code)}, {sql_text(name)}, {sql_text(description)},\n"
                       f"     {sql_text(json.dumps(scene, separators=(',', ':')))}::jsonb)")
-    sql = ("-- Ready-made maps: Kenney's sample maps (CC0), see maps/README.md.\n"
-           "-- Generated by tools/build_maps.py from maps/kenney/*.txt; do not edit by hand.\n"
+    sql = ("-- Ready-made maps: Kenney's sample maps (CC0) and our battle maps, see maps/README.md.\n"
+           "-- Generated by tools/build_maps.py from maps/kenney/*.txt and maps/battle/*.txt; do not edit by hand.\n"
            + NEW_KINDS_SQL
            + "insert into level_templates (code, name, description, scene) values\n"
            + ",\n".join(values)

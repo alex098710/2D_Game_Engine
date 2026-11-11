@@ -16,6 +16,28 @@ The packs were downloaded from kenney.nl on 2026-10-27 (the Roguelike/RPG pack a
 sample on 2026-10-28). Tiny Dungeon is the same pack the game's
 textures already come from.
 
+## Battle maps (our own)
+
+| Map | Code | Source |
+|---|---|---|
+| Frente de batalla | `battle-front` | drawn by `tools/draw_battle_maps.py` (`battle/front.txt`) |
+| Asedio al búnker | `battle-siege` | drawn by `tools/draw_battle_maps.py` (`battle/siege.txt`) |
+
+They are not converted from a source map: the script paints them with simple shapes (roads, a river,
+sandbag lines, bases). Run it and then `python tools/build_maps.py`. Their extra characters:
+
+| Char | Kind | Char | Kind | Char | Kind |
+|---|---|---|---|---|---|
+| `S` | `soldier` | `G` | `grenadier` | `K` | `tank` |
+| `A` | `artillery` | `L` | `legionary` | `Q` | `captain` |
+| `y` | `ally` | `u` | `guard` | `~` | `sandbag` |
+| `\|` | `barricade` | `x` | `hedgehog` | `H` | `bunker` |
+| `W` | `tower` | `F` | `flag` | `!` | `banner` |
+| `o` | `rock` | `-` | `road` | `+` | `medkit` |
+| `X` | `explosive` | `1`-`7` | `pistol`, `rifle`, `shotgun`, `smg`, `sniper`, `launcher`, `grenade` | | |
+
+A person or an item standing among road tiles (`-`) gets a `road` under it, like `path` for `=`.
+
 ## How a Tiled map becomes a scene
 
 The engine's world is 50 x 30 tiles of 32 px, and every Kenney tile (16 px, drawn at 2x) becomes
