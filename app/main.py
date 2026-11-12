@@ -11,7 +11,7 @@ from app.auth.router import router as auth_router
 from app.body_limit import BodyLimitMiddleware
 from app.catalog.router import router as catalog_router
 from app.config import check_configuration, is_production
-from app.database import database_connection
+from app.database import close_pool, database_connection
 from app.play.router import router as play_router
 from app.profile.router import router as profile_router
 from app.projects.router import router as projects_router
@@ -29,6 +29,7 @@ async def lifespan(_app: FastAPI):
     # Refuses to start in production with weak secrets or insecure origins.
     check_configuration()
     yield
+    close_pool()  # give the pooled database connections back on shutdown
 
 
 app = FastAPI(

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.rate_limit import client_ip, proxy_settings
 
-from .auth_service import AuthService
+from .auth_service import LOCKOUT_WINDOW, AuthService
 from .dependencies import bearer_token, current_user, get_auth_service, get_commit
 from .errors import EmailAlreadyRegisteredError, InvalidCredentialsError, InvalidTokenError, TooManyAttemptsError
 from .password_policy import WeakPasswordError
@@ -73,7 +73,9 @@ def log_in(body: LoginIn, request: Request, service: AuthService = Depends(get_a
     try:
         pair = service.log_in(body.email, body.password, _client_ip(request), request.headers.get("user-agent", ""))
     except TooManyAttemptsError:
-        raise HTTPException(status_code=429, detail="Too many failed attempts, try again later")
+        # The lockout lasts the window of failed attempts; say so, like the rate limiter does.
+        raise HTTPException(status_code=429, detail="Too many failed attempts, try again later",
+                            headers={"Retry-After": str(int(LOCKOUT_WINDOW.total_seconds()))})
     except InvalidCredentialsError as error:
         commit()  # keep the failed attempt, or the lockout could never count it
         headers = {} if error.attempts_left is None else {"X-Attempts-Remaining": str(error.attempts_left)}

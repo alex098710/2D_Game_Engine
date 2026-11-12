@@ -40,3 +40,14 @@ body when the browser sends the same tag in `If-None-Match`.
 | `/catalog/*` | `public, max-age=300, stale-while-revalidate=86400` |
 | `/projects/templates` | `private, max-age=60, must-revalidate` + `Vary: Authorization` |
 | everything else | `no-store` |
+
+In production Cloudflare (in front of Render) compresses the answers and turns the strong tag into
+a weak one (`W/"..."`), which is what the browser then sends back. `etag_matches()` uses the weak
+comparison that RFC 9110 asks for in `If-None-Match`, so those requests also get their 304.
+
+## 3. Database connections
+
+The API keeps a small pool of open connections (`psycopg_pool`, `app/database.py`): a request
+borrows one and gives it back, instead of opening a new TLS connection to Supabase every time
+(about 100 ms saved per request). `DB_POOL_MIN` / `DB_POOL_MAX` set its size (1 and 5 by default,
+below the free session pooler's limit); `DB_POOL=0` goes back to one connection per request.

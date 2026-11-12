@@ -57,3 +57,14 @@ def test_catalog_answers_304_when_the_browser_already_has_it():
 def test_private_routes_still_say_no_store():
     response = TestClient(app).get("/health")
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_a_weak_etag_from_a_proxy_still_gets_304():
+    # Cloudflare turns the strong tag into W/"..." when it compresses the answer.
+    from app.cache import etag_matches
+
+    assert etag_matches('W/"abc"', '"abc"')
+    assert etag_matches('"zzz", W/"abc"', '"abc"')
+    assert etag_matches("*", '"abc"')
+    assert not etag_matches('W/"abd"', '"abc"')
+    assert not etag_matches("", '"abc"')

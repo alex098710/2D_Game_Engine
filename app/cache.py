@@ -61,7 +61,23 @@ def cached_json(request: Request, data, cache_control: str = PUBLIC) -> Response
     # A private answer depends on who asks: shared caches must keep one copy per token.
     vary = "Authorization, Accept-Encoding" if cache_control.startswith("private") else "Accept-Encoding"
     headers = {"ETag": tag, "Cache-Control": cache_control, "Vary": vary}
-    sent = request.headers.get("if-none-match", "")
-    if tag in (t.strip() for t in sent.split(",")) or sent.strip() == "*":
+    if etag_matches(request.headers.get("if-none-match", ""), tag):
         return Response(status_code=304, headers=headers)
     return JSONResponse(data, headers=headers)
+
+
+def etag_matches(sent: str, tag: str) -> bool:
+    """If-None-Match uses the weak comparison (RFC 9110, 13.1.2): W/"x" matches "x".
+
+    In production Cloudflare (in front of Render) compresses the answer and turns
+    our strong tag into a weak one, so the browser sends W/"..." back. Comparing
+    only the opaque part makes those requests answer 304 instead of the whole body.
+    """
+    if sent.strip() == "*":
+        return True
+
+    def opaque(value: str) -> str:
+        value = value.strip()
+        return value[2:] if value.startswith("W/") else value
+
+    return opaque(tag) in (opaque(t) for t in sent.split(",") if t.strip())
