@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.rate_limit import client_ip, proxy_settings
 
@@ -8,6 +8,7 @@ from .auth_service import LOCKOUT_WINDOW, AuthService
 from .dependencies import bearer_token, current_user, get_auth_service, get_commit
 from .errors import EmailAlreadyRegisteredError, InvalidCredentialsError, InvalidTokenError, TooManyAttemptsError
 from .password_policy import WeakPasswordError
+from .sealed import SealedError, new_challenge, open_sealed, seal_answer
 from .user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -40,6 +41,39 @@ class LogoutIn(BaseModel):
     refresh_token: str | None = Field(default=None, max_length=200)
 
 
+class SealedIn(BaseModel):
+    """Any of the bodies above, encrypted as one block (see sealed.py)."""
+
+    sealed: str = Field(min_length=10, max_length=4096)
+
+
+def _open(body, model):
+    """(the plain body, the key to seal the answer with, or None for a plain request)."""
+    if not isinstance(body, SealedIn):
+        return body, None
+    try:
+        data, key = open_sealed(body.sealed)
+    except SealedError:
+        raise HTTPException(status_code=400, detail="Sealed request invalid or expired")
+    try:
+        return model(**data), key
+    except ValidationError as error:
+        # Never echo the input back: it may hold a password.
+        detail = [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in error.errors()]
+        raise HTTPException(status_code=422, detail=detail)
+
+
+def _answer(data, key):
+    return data if key is None else seal_answer(data, key)
+
+
+@router.get("/challenge")
+def challenge(response: Response):
+    """A one-time id and the public key to seal one account request with."""
+    response.headers["Cache-Control"] = "no-store"
+    return new_challenge()
+
+
 def _user_json(user: User) -> dict:
     # Never include the salt or the password hash.
     return {"id": user.id, "username": user.username, "email": user.email}
@@ -57,19 +91,21 @@ def _client_ip(request: Request) -> str:
 
 
 @router.post("/register", status_code=201)
-def register(body: RegisterIn, service: AuthService = Depends(get_auth_service)):
+def register(body: SealedIn | RegisterIn, service: AuthService = Depends(get_auth_service)):
+    body, key = _open(body, RegisterIn)
     try:
         user = service.register(body.username, body.email, body.password)
     except EmailAlreadyRegisteredError:
         raise HTTPException(status_code=409, detail="Email already registered")
     except WeakPasswordError as error:
         raise HTTPException(status_code=422, detail=str(error))
-    return _user_json(user)
+    return _answer(_user_json(user), key)
 
 
 @router.post("/login")
-def log_in(body: LoginIn, request: Request, service: AuthService = Depends(get_auth_service),
+def log_in(body: SealedIn | LoginIn, request: Request, service: AuthService = Depends(get_auth_service),
            commit=Depends(get_commit)):
+    body, key = _open(body, LoginIn)
     try:
         pair = service.log_in(body.email, body.password, _client_ip(request), request.headers.get("user-agent", ""))
     except TooManyAttemptsError:
@@ -80,18 +116,19 @@ def log_in(body: LoginIn, request: Request, service: AuthService = Depends(get_a
         commit()  # keep the failed attempt, or the lockout could never count it
         headers = {} if error.attempts_left is None else {"X-Attempts-Remaining": str(error.attempts_left)}
         raise HTTPException(status_code=401, detail="Invalid email or password", headers=headers)
-    return pair.to_json()
+    return _answer(pair.to_json(), key)
 
 
 @router.post("/refresh")
-def refresh(body: RefreshIn, request: Request, service: AuthService = Depends(get_auth_service),
+def refresh(body: SealedIn | RefreshIn, request: Request, service: AuthService = Depends(get_auth_service),
             commit=Depends(get_commit)):
+    body, key = _open(body, RefreshIn)
     try:
         pair = service.refresh(body.refresh_token, request.headers.get("user-agent", ""))
     except InvalidTokenError:
         commit()  # keep a family revocation caused by a reused token
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    return pair.to_json()
+    return _answer(pair.to_json(), key)
 
 
 @router.get("/me")
@@ -113,10 +150,11 @@ def log_out_everywhere(user: User = Depends(current_user), service: AuthService 
 
 
 @router.post("/password", status_code=204)
-def change_password(body: PasswordChangeIn, user: User = Depends(current_user),
+def change_password(body: SealedIn | PasswordChangeIn, user: User = Depends(current_user),
                     service: AuthService = Depends(get_auth_service)):
     """Change the password. Every refresh token of the account is revoked, so other
     devices are logged out; the current access token keeps working until it expires."""
+    body, _ = _open(body, PasswordChangeIn)
     try:
         service.change_password(user, body.current_password, body.new_password)
     except InvalidCredentialsError:

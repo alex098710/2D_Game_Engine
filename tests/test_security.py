@@ -291,3 +291,17 @@ def test_errors_and_limits_keep_cors_headers_so_the_browser_can_read_them():
     for response in (failed, too_big):
         assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
     assert failed.status_code == 500 and "secret" not in failed.text
+
+
+def test_validation_errors_never_echo_what_was_sent():
+    from app.main import app as api
+    from tests.test_auth_routes import make_client
+
+    secret = "x" * 200 + "-mi-contrasena"
+    try:
+        reply = make_client().post("/auth/login", json={"email": "a@b.co", "password": secret})
+    finally:
+        api.dependency_overrides.clear()
+    assert reply.status_code == 422
+    assert "mi-contrasena" not in reply.text and "input" not in reply.text
+    assert reply.json()["detail"][0]["loc"] == ["body", "password"]

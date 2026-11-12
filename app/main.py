@@ -3,7 +3,9 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai_learning.router import router as ai_router
@@ -66,6 +68,26 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "Retry-After", "X-Attempts-Remaining"],
     max_age=600,
 )
+
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, error: RequestValidationError):
+    """422 with where and why, never the value that was sent: it may be a password or a token."""
+    errors = error.errors()
+    # A body that may come sealed is "SealedIn | LoginIn": pydantic reports both branches.
+    # Keep the errors of the plain branch, and drop the model names from the location.
+    plain = [e for e in errors if "SealedIn" not in e.get("loc", ())] or errors
+    detail = [
+        {"type": e.get("type"), "loc": [part for part in e.get("loc", ()) if not _is_model_name(part)], "msg": e.get("msg")}
+        for e in plain
+    ]
+    return JSONResponse(status_code=422, content={"detail": detail})
+
+
+def _is_model_name(part) -> bool:
+    return isinstance(part, str) and part[:1].isupper() and part.endswith("In")
+
 
 app.include_router(auth_router)
 app.include_router(projects_router)
