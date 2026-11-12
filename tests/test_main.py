@@ -45,3 +45,23 @@ def test_cors_allows_the_frontend_origin():
         headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST"},
     )
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_uptime_monitors_can_check_with_head():
+    # UptimeRobot sends HEAD; a 405 marked the API as down although it was up.
+    class FakeConnection:
+        def execute(self, sql):
+            class Result:
+                def fetchone(self):
+                    return {"?column?": 1}
+            return Result()
+
+    app.dependency_overrides[database_connection] = lambda: FakeConnection()
+    try:
+        client = TestClient(app)
+        for path in ("/health", "/health/db"):
+            response = client.head(path)
+            assert response.status_code == 200
+            assert response.content == b""
+    finally:
+        app.dependency_overrides.clear()

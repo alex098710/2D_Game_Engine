@@ -76,12 +76,13 @@ app.include_router(catalog_router)
 app.include_router(profile_router)
 
 
-@app.get("/health")
+# Uptime monitors (UptimeRobot) check with HEAD: answer it like GET, without the body.
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"ok": True}
 
 
-@app.get("/health/db")
+@app.api_route("/health/db", methods=["GET", "HEAD"])
 def health_database(connection=Depends(database_connection)):
     """Check that the database answers (the uptime monitor calls it). Says nothing else."""
     connection.execute("select 1").fetchone()
