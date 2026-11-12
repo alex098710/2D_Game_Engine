@@ -1,6 +1,6 @@
-import os
-
 import copy
+import os
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import ValidationError
@@ -193,12 +193,23 @@ def add_objects_with_ai(
     owner_id: int = Depends(current_owner_id),
     ai_client: AiServiceClient = Depends(get_ai_client),
 ):
-    """Ask the AI service for new objects and add them to the project's scene."""
+    """Apply a natural-language request to the scene: remove what it asks to remove, then add.
+
+    "borra los enemigos", "elimina todo y pon 5 tanques": the AI service says which objects go
+    (only ids that really are in the scene count) and which new ones come. The previous scene
+    is kept as a version, so the change can be undone from the project's history.
+    """
     project = load_project(project_id, repo, owner_id)
     repo.commit()  # do not hold the database while the AI answers
     try:
-        generated = ai_client.generate(body.prompt, list(project.scene))
+        generated, removed = ai_client.edit(body.prompt, list(project.scene))
     except AiServiceError as error:
         raise HTTPException(status_code=502, detail="La IA no respondió, inténtalo de nuevo") from error
-    scene = append_objects(project, validate_generated(generated))
-    return project_json(repo.update_scene(project_id, owner_id, scene))
+    added = validate_generated(generated)
+    gone = set(removed) & {obj["id"] for obj in project.scene}
+    kept = [obj for obj in project.scene if obj["id"] not in gone]
+    if gone:
+        repo.save_version(project_id, owner_id, list(project.scene), "Antes de que la IA borrara objetos")
+    scene = append_objects(SimpleNamespace(scene=kept), added)
+    updated = repo.update_scene(project_id, owner_id, scene)
+    return {**project_json(updated), "ai": {"added": len(added), "removed": len(gone)}}

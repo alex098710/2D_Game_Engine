@@ -12,6 +12,9 @@ class FakeAiClient:
         self._error = error
         self.prompts = []
 
+    def edit(self, prompt, scene=None):
+        return self.generate(prompt, scene), []
+
     def generate(self, prompt, scene=None):
         self.prompts.append(prompt)
         if self._error:
@@ -111,3 +114,43 @@ def test_ai_can_add_2d_characters():
     project_id = client.post("/projects", json={"name": "p"}).json()["id"]
     scene = client.post(f"/projects/{project_id}/ai", json={"prompt": "un mago"}).json()["scene"]
     assert [obj["kind"] for obj in scene] == ["wizard"]
+
+
+class RemovingAiClient:
+    """Answers like the AI service for "borra los enemigos y pon una moneda"."""
+
+    def __init__(self, removed, objects=()):
+        self._removed = removed
+        self._objects = list(objects)
+
+    def edit(self, prompt, scene=None):
+        return self._objects, self._removed
+
+
+def test_ai_can_remove_objects_and_add_others():
+    client, repo = make_client(RemovingAiClient(["e1", "e2", "not-in-scene"], [{"id": "c", "kind": "coin", "x": 5, "y": 5}]))
+    project_id = client.post("/projects", json={"name": "p"}).json()["id"]
+    client.put(f"/projects/{project_id}/scene", json={"scene": [
+        {"id": "p", "kind": "player", "x": 1, "y": 1},
+        {"id": "e1", "kind": "enemy", "x": 50, "y": 50},
+        {"id": "e2", "kind": "tank", "x": 90, "y": 90},
+    ]})
+
+    response = client.post(f"/projects/{project_id}/ai", json={"prompt": "borra los enemigos y pon una moneda"})
+
+    assert response.status_code == 200
+    assert [obj["id"] for obj in response.json()["scene"]] == ["p", "c"]
+    assert response.json()["ai"] == {"added": 1, "removed": 2}
+
+
+def test_ai_can_clear_the_scene():
+    client, _ = make_client(RemovingAiClient(["p", "w"]))
+    project_id = client.post("/projects", json={"name": "p"}).json()["id"]
+    client.put(f"/projects/{project_id}/scene", json={"scene": [
+        {"id": "p", "kind": "player", "x": 1, "y": 1}, {"id": "w", "kind": "wall", "x": 64, "y": 64},
+    ]})
+
+    response = client.post(f"/projects/{project_id}/ai", json={"prompt": "elimina todo"})
+
+    assert response.json()["scene"] == []
+    assert response.json()["ai"] == {"added": 0, "removed": 2}

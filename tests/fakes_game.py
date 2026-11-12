@@ -122,6 +122,9 @@ class FakeLearningAi:
         objects = [{"id": f"wall-{i}", "kind": "wall", "x": 100 + 32 * i, "y": 200} for i in range(count)]
         return {"objects": objects, "difficulty": model.get("difficulty", DEFAULT_DIFFICULTY)}
 
+    def edit(self, prompt, scene=None):
+        return self.generate(prompt, scene), []
+
     def generate(self, prompt, scene=None):
         self._maybe_fail()
         return []

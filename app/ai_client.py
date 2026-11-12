@@ -43,6 +43,14 @@ class AiServiceClient:
         data = self._post("/generate", {"prompt": prompt, "scene": scene or []})
         return self._objects(data)
 
+    def edit(self, prompt: str, scene: list | None = None) -> tuple:
+        """(objects to add, ids to remove) for a request like "borra los enemigos y pon 3 monedas"."""
+        data = self._post("/generate", {"prompt": prompt, "scene": scene or []})
+        removed = data.get("removed", [])
+        if not isinstance(removed, list) or not all(isinstance(i, str) for i in removed):
+            raise AiServiceError("AI service call failed: invalid removed ids")
+        return self._objects(data), removed
+
     def obstacles(self, model: dict, scene: list, count: int) -> dict:
         """New obstacles chosen by the learned model: {"objects", "difficulty"}."""
         data = self._post("/obstacles", {"model": model, "scene": scene, "count": count})
