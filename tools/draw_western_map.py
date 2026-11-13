@@ -21,8 +21,8 @@ WIDTH, HEIGHT, TILE = 1600, 960, 32
 SIZES = {
     "saloon": (160, 128), "cabin": (96, 96), "wagon": (64, 48), "hay": (32, 32), "crates": (64, 48),
     "trough": (64, 32), "cactus": (32, 48), "lamp": (32, 64), "boardwalk": (32, 32), "dirt": (32, 32),
-    "bandit": (24, 28), "player": (24, 24), "coin": (16, 16), "villager": (24, 28), "chest": (28, 24),
-    "pistol": (22, 16), "medkit": (22, 20), "barrel": (28, 30), "fence": (32, 32), "tree": (32, 32),
+    "bandit": (24, 28), "player": (24, 24), "coin": (16, 16), "villager": (24, 28), "chest": (32, 28),
+    "pistol": (22, 16), "medkit": (20, 18), "barrel": (28, 30), "fence": (32, 32), "tree": (32, 32),
     "explosive": (28, 30),
 }
 GROUND = {"dirt", "boardwalk"}

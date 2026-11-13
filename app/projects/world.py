@@ -28,10 +28,12 @@ OBJECT_KINDS = (
     "pistol", "rifle", "shotgun", "smg", "sniper", "launcher", "grenade", "explosive",
     # the Western town: buildings, covers, ground and the bandit
     "saloon", "cabin", "wagon", "hay", "crates", "trough", "cactus", "lamp", "boardwalk", "dirt", "bandit",
+    # the industrial arena: floor, walls, covers, the reactor and two enemies
+    "metalfloor", "hazard", "steelwall", "container", "pipes", "reactor", "beacon", "barrier", "turret", "drone",
 )
 ENEMY_KINDS = (
     "enemy", "bat", "spider", "ghost", "brute", "marksman", "necromancer", "demon", "mimic", "rat",
-    "soldier", "grenadier", "tank", "artillery", "legionary", "captain", "bandit",
+    "soldier", "grenadier", "tank", "artillery", "legionary", "captain", "bandit", "turret", "drone",
 )
 ITEM_KINDS = (
     "chest", "potion", "sword", "axe", "wand", "bow", "dagger", "hammer", "spear", "staff",
@@ -49,5 +51,5 @@ COIN_POINTS = 1
 ENEMY_POINTS = {
     "enemy": 5, "bat": 3, "spider": 4, "ghost": 6, "brute": 15,
     "marksman": 7, "necromancer": 9, "demon": 40, "mimic": 8, "rat": 2,
-    "soldier": 7, "grenadier": 8, "tank": 35, "artillery": 10, "legionary": 6, "captain": 16, "bandit": 7,
+    "soldier": 7, "grenadier": 8, "tank": 35, "artillery": 10, "legionary": 6, "captain": 16, "bandit": 7, "turret": 10, "drone": 5,
 }

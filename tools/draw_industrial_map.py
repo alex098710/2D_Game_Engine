@@ -1,0 +1,183 @@
+"""Draw the ready-made map "Arena industrial" and write its migration.
+
+    python tools/draw_industrial_map.py
+
+A closed combat arena of steel: a metal floor inside a ring of steel walls,
+hazard stripes around a glowing reactor in the middle, containers, pipes and
+barriers as covers, warning beacons in the corners. Four turrets guard the
+corners and four drones hunt the hero, who starts at the west gate.
+
+Objects are placed by their centre. Before writing, the script checks that
+every object is inside the world, that no two solids overlap, that people and
+pick-ups stand clear of solids and that there is exactly one player.
+"""
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+MIGRATION = ROOT / "migrations" / "096_industrial_arena.sql"
+WIDTH, HEIGHT, TILE = 1600, 960, 32
+MAX_OBJECTS = 1500
+
+SIZES = {
+    "metalfloor": (32, 32), "hazard": (32, 32), "steelwall": (32, 32), "container": (64, 32), "pipes": (64, 32),
+    "reactor": (64, 64), "beacon": (32, 48), "barrier": (32, 16), "turret": (32, 28), "drone": (24, 24),
+    "player": (24, 24), "coin": (16, 16), "medkit": (20, 18), "rifle": (30, 14), "smg": (26, 20),
+    "explosive": (28, 30), "chest": (32, 28),
+}
+GROUND = {"metalfloor", "hazard"}
+NOT_SOLID = GROUND | {"coin", "medkit", "rifle", "smg", "player", "drone", "turret"}
+
+objects: list = []
+
+
+def put(kind: str, x: float, y: float) -> None:
+    objects.append({"id": f"{kind}-{sum(1 for o in objects if o['kind'] == kind) + 1}", "kind": kind, "x": x, "y": y})
+
+
+def tile_centre(col: int, row: int) -> tuple:
+    return col * TILE + TILE / 2, row * TILE + TILE / 2
+
+
+# --- the arena: walls on columns 3 and 46, rows 2 and 27; floor inside --------------------
+LEFT, RIGHT, TOP, BOTTOM = 3, 46, 2, 27
+GATE = range(13, 17)  # the west gate (rows), open in the wall
+HAZARD = {(c, r) for c in range(21, 29) for r in range(11, 19)} - {(c, r) for c in range(22, 28) for r in range(12, 18)}
+
+for row in range(TOP + 1, BOTTOM):
+    for col in range(LEFT + 1, RIGHT):
+        put("hazard" if (col, row) in HAZARD else "metalfloor", *tile_centre(col, row))
+for col in range(LEFT, RIGHT + 1):
+    put("steelwall", *tile_centre(col, TOP))
+    put("steelwall", *tile_centre(col, BOTTOM))
+for row in range(TOP + 1, BOTTOM):
+    put("steelwall", *tile_centre(RIGHT, row))
+    if row in GATE:
+        put("metalfloor", *tile_centre(LEFT, row))  # the gate is open floor
+    else:
+        put("steelwall", *tile_centre(LEFT, row))
+# A metal walkway leading to the gate from outside.
+for col in range(0, LEFT):
+    for row in GATE:
+        put("metalfloor", *tile_centre(col, row))
+
+# --- the reactor in the middle, and the covers around it -------------------------------------
+put("reactor", 800, 480)
+for x, y in ((448, 256), (1152, 256), (448, 704), (1152, 704)):
+    put("container", x, y)
+for x, y in ((640, 352), (960, 352), (640, 608), (960, 608)):
+    put("barrier", x, y)
+for x, y in ((800, 192), (800, 768)):
+    put("pipes", x, y)
+for x, y in ((272, 384), (272, 576), (1328, 384), (1328, 576)):
+    put("barrier", x, y)
+put("explosive", 560, 480)
+put("explosive", 1040, 480)
+for x, y in ((176, 136), (1424, 136), (176, 824), (1424, 824)):
+    put("beacon", x, y)
+
+# --- enemies, loot and the hero --------------------------------------------------------------
+for x, y in ((176, 224), (1424, 224), (176, 736), (1424, 736)):
+    put("turret", x, y)
+for x, y in ((720, 304), (880, 656), (1232, 448), (1232, 528)):
+    put("drone", x, y)
+put("player", 48, 480)
+put("smg", 208, 480)
+put("medkit", 800, 352)
+put("medkit", 800, 608)
+put("chest", 1360, 480)
+for x, y in ((352, 256), (352, 704), (544, 320), (544, 640), (1056, 320), (1056, 640), (1248, 256), (1248, 704)):
+    put("coin", x, y)
+
+
+def box(obj: dict) -> tuple:
+    w, h = SIZES[obj["kind"]]
+    return obj["x"] - w / 2, obj["y"] - h / 2, obj["x"] + w / 2, obj["y"] + h / 2
+
+
+def apart(a: tuple, b: tuple) -> bool:
+    return a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+
+
+def check() -> None:
+    assert len(objects) <= MAX_OBJECTS, f"{len(objects)} objects, more than {MAX_OBJECTS}"
+    assert sum(o["kind"] == "player" for o in objects) == 1, "exactly one player"
+    for obj in objects:
+        left, top, right, bottom = box(obj)
+        assert left >= 0 and top >= 0 and right <= WIDTH and bottom <= HEIGHT, f"{obj['id']} leaves the world"
+    solids = [o for o in objects if o["kind"] not in NOT_SOLID]
+    for i, a in enumerate(solids):
+        for b in solids[i + 1:]:
+            assert apart(box(a), box(b)), f"{a['id']} overlaps {b['id']}"
+    for obj in objects:
+        if obj["kind"] in NOT_SOLID - GROUND:
+            for s in solids:
+                assert apart(box(obj), box(s)), f"{obj['id']} is inside {s['id']}"
+
+
+def main() -> None:
+    check()
+    scene = json.dumps(objects, separators=(",", ":"), ensure_ascii=False)
+    sql = """-- The industrial arena: floor, walls, covers, the reactor and two enemies (generated by
+-- tools/draw_industrial_map.py together with the map "Arena industrial").
+insert into object_kinds (code, name, category, solid, movable, collectible, hostile) values
+    ('metalfloor', 'Suelo de metal',    'decoration', false, false, false, false),
+    ('hazard',     'Franja de peligro', 'decoration', false, false, false, false),
+    ('steelwall',  'Muro de acero',     'building',   true,  false, false, false),
+    ('container',  'Contenedor',        'obstacle',   true,  false, false, false),
+    ('pipes',      'Tuberías',          'obstacle',   true,  false, false, false),
+    ('reactor',    'Reactor',           'building',   true,  false, false, false),
+    ('beacon',     'Baliza',            'decoration', true,  false, false, false),
+    ('barrier',    'Barrera',           'obstacle',   true,  false, false, false),
+    ('turret',     'Torreta',           'enemy',      true,  false, false, true),
+    ('drone',      'Dron',              'enemy',      false, true,  false, true)
+on conflict (code) do nothing;
+
+insert into object_physics (kind, body_type, material_id, mass, drag, immovable)
+select k.kind, k.body_type, m.id, k.mass, k.drag, k.immovable
+from (values
+    ('metalfloor', 'none',    'stone', 1.0, 0,   true),
+    ('hazard',     'none',    'stone', 1.0, 0,   true),
+    ('steelwall',  'static',  'stone', 1.0, 0,   true),
+    ('container',  'static',  'stone', 1.0, 0,   true),
+    ('pipes',      'static',  'stone', 1.0, 0,   true),
+    ('reactor',    'static',  'stone', 1.0, 0,   true),
+    ('beacon',     'static',  'stone', 1.0, 0,   true),
+    ('barrier',    'static',  'stone', 1.0, 0,   true),
+    ('turret',     'static',  'stone', 1.0, 0,   true),
+    ('drone',      'dynamic', 'flesh', 0.5, 100, false)
+) as k (kind, body_type, material, mass, drag, immovable)
+join physics_materials m on m.code = k.material
+on conflict (kind) do nothing;
+
+insert into textures (pack_id, code, kind, file_path, width, height, frames)
+select p.id, t.code, t.code, 'textures/' || t.code || '.png', t.w, t.h, 1
+from texture_packs p
+cross join (values
+    ('metalfloor', 32, 32), ('hazard', 32, 32), ('steelwall', 32, 32), ('container', 64, 32), ('pipes', 64, 32),
+    ('reactor', 64, 64), ('beacon', 32, 48), ('barrier', 32, 16), ('turret', 32, 32), ('drone', 32, 32)
+) as t (code, w, h)
+where p.code = 'kenney-tiny'
+on conflict (pack_id, code) do nothing;
+
+insert into enemy_types (code, name, health, speed, damage, behavior, texture_code) values
+    ('turret', 'Torreta', 6, 0,   1, 'idle',  'turret'),
+    ('drone',  'Dron',    2, 125, 1, 'chase', 'drone')
+on conflict (code) do nothing;
+
+"""
+    sql += (
+        "insert into level_templates (code, name, description, scene) values\n"
+        "    ('industrial-arena', 'Arena industrial', "
+        "'Una arena cerrada de acero con un reactor en el centro: cuatro torretas vigilan las esquinas y "
+        "cuatro drones te persiguen; cúbrete tras los contenedores y las barreras', "
+        f"'{scene.replace(chr(39), chr(39) * 2)}')\n"
+        "on conflict (code) do update set name = excluded.name, description = excluded.description, "
+        "scene = excluded.scene;\n"
+    )
+    MIGRATION.write_text(sql, encoding="utf-8")
+    print(f"wrote {MIGRATION.name}: {len(objects)} objects")
+
+
+if __name__ == "__main__":
+    main()
