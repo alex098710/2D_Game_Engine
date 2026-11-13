@@ -1,6 +1,8 @@
 import time
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from app.ai_client import AiServiceClient, AiServiceError
 from app.auth.dependencies import current_user
@@ -15,9 +17,24 @@ from app.projects.router import (
 )
 from app.projects.schemas import ObstacleRequest
 from .dependencies import get_ai_models
-from .repository import AiModelRepository, difficulty_of
+from .repository import DIFFICULTY_LEVELS, AiModelRepository, difficulty_of, level_of
 
 router = APIRouter(prefix="/projects/{project_id}/ai", tags=["ai"])
+
+
+class DifficultyRequest(BaseModel):
+    level: Literal["easy", "medium", "hard", "extreme"]
+
+
+def model_json(model: dict) -> dict:
+    difficulty = difficulty_of(model)
+    return {
+        "samples_seen": model["samples_seen"],
+        "version": model["version"],
+        "difficulty": difficulty,
+        "level": level_of(difficulty),
+        "parameters": model["parameters"],
+    }
 
 
 @router.get("/model")
@@ -25,13 +42,16 @@ def get_model(project_id: int, repo=Depends(get_repository), models: AiModelRepo
               user: User = Depends(current_user)):
     """What the AI has learned so far for this level."""
     load_project(project_id, repo, user.id)
-    model = models.get(project_id)
-    return {
-        "samples_seen": model["samples_seen"],
-        "version": model["version"],
-        "difficulty": difficulty_of(model),
-        "parameters": model["parameters"],
-    }
+    return model_json(models.get(project_id))
+
+
+@router.put("/difficulty")
+def set_difficulty(project_id: int, body: DifficultyRequest, repo=Depends(get_repository),
+                   models: AiModelRepository = Depends(get_ai_models), user: User = Depends(current_user)):
+    """Choose Fácil, Medio, Difícil or Extremo; the AI keeps learning from that point."""
+    load_project(project_id, repo, user.id)
+    models.set_difficulty(project_id, DIFFICULTY_LEVELS[body.level])
+    return model_json(models.get(project_id))
 
 
 @router.post("/obstacles")

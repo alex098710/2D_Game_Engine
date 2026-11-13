@@ -222,3 +222,31 @@ def test_two_requests_finishing_the_same_run_count_it_once():
     assert world.client.post(url, json=RUN).status_code == 404
     assert world.plays.stats[1]["games_played"] == 1
     assert len(world.plays.scores) == 1
+
+
+def test_the_player_can_choose_one_of_four_difficulties():
+    world = World(ai=FakeLearningAi())
+    assert world.client.get(f"/projects/{world.project_id}/ai/model").json()["level"] == "medium"
+    for level, value in [("easy", 0.2), ("medium", 0.45), ("hard", 0.7), ("extreme", 0.95)]:
+        model = world.client.put(f"/projects/{world.project_id}/ai/difficulty", json={"level": level}).json()
+        assert model["level"] == level
+        assert model["difficulty"] == value
+    # The next run starts at the chosen difficulty.
+    assert world.client.post(f"/projects/{world.project_id}/plays").json()["difficulty"] == 0.95
+
+
+def test_choosing_a_difficulty_keeps_what_was_learned():
+    world = World(ai=FakeLearningAi())
+    play(world)
+    model = world.client.put(f"/projects/{world.project_id}/ai/difficulty", json={"level": "easy"}).json()
+    assert model["samples_seen"] == 1
+    assert model["difficulty"] == 0.2
+
+
+def test_an_unknown_difficulty_or_someone_elses_level_is_rejected():
+    world = World()
+    assert world.client.put(f"/projects/{world.project_id}/ai/difficulty", json={"level": "imposible"}).status_code == 422
+    other = World(user_id=2)
+    other.projects = world.projects
+    app.dependency_overrides[get_repository] = lambda: world.projects
+    assert other.client.put(f"/projects/{world.project_id}/ai/difficulty", json={"level": "easy"}).status_code == 404

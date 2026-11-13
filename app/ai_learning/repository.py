@@ -2,6 +2,15 @@ from psycopg.types.json import Jsonb
 
 DEFAULT_DIFFICULTY = 0.5
 
+# The four levels a player can choose; the AI keeps learning from there.
+# Values stay inside the AI service's own range (0.05 to 0.95).
+DIFFICULTY_LEVELS = {"easy": 0.2, "medium": 0.45, "hard": 0.7, "extreme": 0.95}
+
+
+def level_of(difficulty: float) -> str:
+    """The level a difficulty value falls in: the nearest of the four."""
+    return min(DIFFICULTY_LEVELS, key=lambda level: abs(DIFFICULTY_LEVELS[level] - difficulty))
+
 
 class AiModelRepository:
     """What the AI learned per project ('ai_models', 'ai_training_samples') and
@@ -29,6 +38,16 @@ class AiModelRepository:
             (project_id, Jsonb(parameters)),
         ).fetchone()
         return row["id"]
+
+    def set_difficulty(self, project_id: int, difficulty: float) -> None:
+        """Choose the difficulty by hand; what was learned (samples) is kept."""
+        self._connection.execute(
+            "insert into ai_models (project_id, parameters, samples_seen) values (%s, %s, 0) "
+            "on conflict (project_id) do update set "
+            "parameters = ai_models.parameters || excluded.parameters, "
+            "version = ai_models.version + 1, updated_at = now()",
+            (project_id, Jsonb({"difficulty": difficulty})),
+        )
 
     def add_sample(self, model_id: int, play_id: int, features: dict, reward: float) -> None:
         self._connection.execute(

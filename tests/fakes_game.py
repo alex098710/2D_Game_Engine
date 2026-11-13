@@ -73,6 +73,12 @@ class FakeAiModelRepository:
                                    "version": current["version"] + 1}
         return project_id
 
+    def set_difficulty(self, project_id, difficulty):
+        current = self.get(project_id)
+        self.models[project_id] = {**current, "id": project_id,
+                                   "parameters": {**current["parameters"], "difficulty": difficulty},
+                                   "version": current["version"] + 1}
+
     def add_sample(self, model_id, play_id, features, reward):
         self.samples.append((model_id, play_id, reward))
 
