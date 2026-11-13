@@ -116,6 +116,18 @@ def test_ai_model_upsert_and_samples(connection, user, project):
     models.record_generation(request_id, [{"id": "w", "kind": "wall", "x": 1, "y": 1}], 0.7)
 
 
+def test_choosing_a_difficulty_keeps_the_learned_parameters(connection, user, project):
+    models = AiModelRepository(connection)
+    models.set_difficulty(project.id, 0.2)  # no model yet: created with no samples
+    assert (models.get(project.id)["samples_seen"], difficulty_of(models.get(project.id))) == (0, 0.2)
+    models.save(project.id, {"difficulty": 0.5, "spread": 0.3})
+    models.set_difficulty(project.id, 0.95)
+    model = models.get(project.id)
+    assert difficulty_of(model) == 0.95
+    assert model["parameters"]["spread"] == 0.3
+    assert model["samples_seen"] == 1
+
+
 def test_settings_default_then_saved(connection, user):
     repo = SettingsRepository(connection)
     assert repo.get(user.id) == DEFAULTS
