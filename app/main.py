@@ -31,6 +31,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 async def lifespan(_app: FastAPI):
     # Refuses to start in production with weak secrets or insecure origins.
     check_configuration()
+    if is_production():
+        # Deploys apply pending migrations by themselves (each runs only once).
+        from app.database import get_connection
+        from app.migrate import apply_pending
+        with get_connection() as connection:
+            applied = apply_pending(connection)
+        logging.getLogger("app").info("%d migration(s) applied at start-up", len(applied))
     yield
     close_pool()  # give the pooled database connections back on shutdown
 
