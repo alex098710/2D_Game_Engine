@@ -85,6 +85,15 @@ class ProjectRepository:
         ).fetchone()
         return row["scene"] if row else None
 
+    def creation_kinds(self, owner_id: int, ids: list) -> dict:
+        """{creation id: base kind} of this owner's enemy and object creations among ids."""
+        rows = self._connection.execute(
+            "select id, base_kind from custom_entities "
+            "where owner_id = %s and id = any(%s) and category in ('enemy', 'object')",
+            (owner_id, ids),
+        ).fetchall()
+        return {row["id"]: row["base_kind"] for row in rows}
+
     def commit(self) -> None:
         """Save what the request wrote so far and end the transaction.
 

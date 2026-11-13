@@ -17,6 +17,8 @@ class GameObjectIn(BaseModel):
     kind: ObjectKind
     x: float = Field(ge=0, le=WORLD_WIDTH)
     y: float = Field(ge=0, le=WORLD_HEIGHT)
+    # Optional: the id of one of the owner's own creations based on this kind.
+    variant: int | None = Field(default=None, ge=1)
 
 
 class ProjectCreate(BaseModel):

@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.admin.router import router as admin_router
 from app.ai_learning.router import router as ai_router
 from app.auth.router import router as auth_router
 from app.body_limit import BodyLimitMiddleware
@@ -96,6 +97,7 @@ app.include_router(play_router)
 app.include_router(settings_router)
 app.include_router(catalog_router)
 app.include_router(profile_router)
+app.include_router(admin_router)
 
 
 # Uptime monitors (UptimeRobot) check with HEAD: answer it like GET, without the body.

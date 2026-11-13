@@ -124,7 +124,8 @@ def duplicate_project(project_id: int, repo=Depends(get_repository), owner_id: i
 @router.put("/{project_id}/scene")
 def save_scene(project_id: int, body: SceneUpdate, repo=Depends(get_repository),
                owner_id: int = Depends(current_owner_id)):
-    scene = [obj.model_dump() for obj in body.scene]
+    scene = [_compact(obj.model_dump()) for obj in body.scene]
+    check_variants(scene, repo, owner_id)
     project = repo.update_scene(project_id, owner_id, scene)
     if project is None:
         raise _not_found()
@@ -153,6 +154,25 @@ def restore_version(project_id: int, version_number: int, repo=Depends(get_repos
     return project_json(project)
 
 
+def _compact(obj: dict) -> dict:
+    """Objects without a creation are stored as before, with no 'variant' key."""
+    if obj.get("variant") is None:
+        obj.pop("variant", None)
+    return obj
+
+
+def check_variants(scene: list, repo, owner_id: int) -> None:
+    """Every creation an object points to must be the owner's and match its kind."""
+    wanted = {obj["variant"] for obj in scene if obj.get("variant") is not None}
+    if not wanted:
+        return
+    owned = repo.creation_kinds(owner_id, sorted(wanted))
+    for obj in scene:
+        variant = obj.get("variant")
+        if variant is not None and owned.get(variant) != obj["kind"]:
+            raise HTTPException(status_code=422, detail="Una creación del mapa no existe o no es tuya")
+
+
 def with_unique_ids(existing: list, new: list) -> list:
     """Give each new object an id that is not used yet in the scene."""
     used = {obj["id"] for obj in existing}
@@ -173,7 +193,7 @@ def validate_generated(objects: list) -> list:
     The AI may not add a second player: extra 'player' objects are dropped.
     """
     try:
-        validated = [GameObjectIn(**obj).model_dump() for obj in objects]
+        validated = [_compact({**GameObjectIn(**obj).model_dump(), "variant": None}) for obj in objects]
     except (ValidationError, TypeError):
         raise HTTPException(status_code=502, detail="AI service returned invalid objects")
     return [obj for obj in validated if obj["kind"] != "player"]

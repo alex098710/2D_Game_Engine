@@ -204,3 +204,34 @@ def test_every_table_refuses_rows_to_anyone_but_the_api(connection):
         "select tablename from pg_tables where schemaname = 'public' and not rowsecurity"
     ).fetchall()
     assert [row["tablename"] for row in open_tables] == []
+
+
+def test_admin_balance_and_creations_round_trip(connection, user):
+    from app.admin.repository import AdminRepository
+    admin = AdminRepository(connection)
+    assert admin.balance(user.id) == {"heroes": {}, "enemies": {}}
+    saved = admin.save_balance(user.id, {"knight": {"health": 9, "damage": 3}}, {"brute": {"health": 20, "damage": 4}})
+    assert admin.balance(user.id) == saved
+    values = {"category": "enemy", "base_kind": "brute", "name": "Ogro de hielo", "tint": "#7fd4ff",
+              "health": 12, "damage": 3, "speed": 50, "value": 0}
+    orc = admin.create(user.id, values)
+    assert admin.count(user.id) == 1
+    assert admin.update(user.id, orc["id"], {**values, "name": "Ogro de fuego"})["name"] == "Ogro de fuego"
+    assert ProjectRepository(connection).creation_kinds(user.id, [orc["id"], 999999]) == {orc["id"]: "brute"}
+    other = UserRepository(connection).create("other-admin", "other-admin@example.com", b"\x01" * 16, b"\x02" * 64)
+    assert admin.creations(other.id) == []
+    assert admin.update(other.id, orc["id"], values) is None
+    assert admin.delete(other.id, orc["id"]) is False
+    assert ProjectRepository(connection).creation_kinds(other.id, [orc["id"]]) == {}
+    assert admin.delete(user.id, orc["id"]) is True
+    assert admin.creations(user.id) == []
+
+
+def test_a_scene_object_keeps_its_creation(connection, user):
+    from app.admin.repository import AdminRepository
+    orc = AdminRepository(connection).create(user.id, {"category": "enemy", "base_kind": "brute", "name": "Ogro",
+                                                       "tint": "#ffffff", "health": 9, "damage": 2, "speed": 40, "value": 0})
+    repo = ProjectRepository(connection)
+    created = repo.create(user.id, "lvl", [])
+    updated = repo.update_scene(created.id, user.id, [{"id": "o", "kind": "brute", "x": 5, "y": 5, "variant": orc["id"]}])
+    assert updated.scene[0]["variant"] == orc["id"]
