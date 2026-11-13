@@ -235,3 +235,22 @@ def test_a_scene_object_keeps_its_creation(connection, user):
     created = repo.create(user.id, "lvl", [])
     updated = repo.update_scene(created.id, user.id, [{"id": "o", "kind": "brute", "x": 5, "y": 5, "variant": orc["id"]}])
     assert updated.scene[0]["variant"] == orc["id"]
+
+
+def test_pictures_belong_to_one_account_and_creations_fall_back_when_deleted(connection, user):
+    from app.admin.repository import AdminRepository
+    from app.admin.sprite_scan import _write_png
+    admin = AdminRepository(connection)
+    png = _write_png(b"\xff\x00\x00\xff" * 64, 8, 8)
+    sprite = admin.add_sprite(user.id, "Mi dragon", png, 8, 8, "a" * 64)
+    again = admin.add_sprite(user.id, "Dragon rojo", png, 8, 8, "a" * 64)
+    assert again["id"] == sprite["id"] and admin.sprite_count(user.id) == 1  # same picture, kept once
+    assert bytes(admin.sprites(user.id)[0]["png"]) == png
+    other = UserRepository(connection).create("other-sprites", "other-sprites@example.com", b"\x01" * 16, b"\x02" * 64)
+    assert admin.sprites(other.id) == [] and not admin.owns_sprite(other.id, sprite["id"])
+    assert admin.delete_sprite(other.id, sprite["id"]) is False
+    dragon = admin.create(user.id, {"category": "enemy", "base_kind": "brute", "name": "Dragon", "tint": "#ffffff",
+                                    "health": 9, "damage": 2, "speed": 40, "value": 0, "sprite_id": sprite["id"]})
+    assert dragon["sprite_id"] == sprite["id"]
+    assert admin.delete_sprite(user.id, sprite["id"]) is True
+    assert admin.creations(user.id)[0]["sprite_id"] is None  # back to the drawing of its base
