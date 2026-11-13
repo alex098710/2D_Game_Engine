@@ -6,6 +6,9 @@ from .world import MAX_OBJECTS, OBJECT_KINDS, WORLD_HEIGHT, WORLD_WIDTH
 
 ObjectKind = Literal[OBJECT_KINDS]
 
+# Short names fit every list and title of the editor without being cut.
+PROJECT_NAME_MAX = 30
+
 
 class GameObjectIn(BaseModel):
     """One object of a scene. Coordinates must be inside the world."""
@@ -17,7 +20,7 @@ class GameObjectIn(BaseModel):
 
 
 class ProjectCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=PROJECT_NAME_MAX)
     template: str | None = Field(default=None, max_length=40)
 
     @field_validator("name")

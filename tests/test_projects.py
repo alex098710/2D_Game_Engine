@@ -145,7 +145,16 @@ def new_project(client, name="p"):
 def test_blank_or_too_long_names_are_rejected():
     client, _ = make_client()
     assert client.post("/projects", json={"name": "   "}).status_code == 422
-    assert client.post("/projects", json={"name": "x" * 101}).status_code == 422
+    assert client.post("/projects", json={"name": "x" * 31}).status_code == 422
+    assert client.post("/projects", json={"name": "x" * 30}).status_code == 201
+
+
+def test_a_copy_keeps_its_name_within_the_limit():
+    client, _ = make_client()
+    project_id = new_project(client, "y" * 30)
+    copy = client.post(f"/projects/{project_id}/duplicate").json()
+    assert copy["name"].endswith(" (copia)")
+    assert len(copy["name"]) <= 30
 
 
 def test_project_names_are_trimmed():

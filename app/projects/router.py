@@ -11,7 +11,7 @@ from app.auth.user import User
 from app.cache import PRIVATE, cached_json, reference_cache
 from app.database import database_connection
 from .repository import ProjectRepository
-from .schemas import AiRequest, GameObjectIn, ProjectCreate, ProjectRename, SceneUpdate
+from .schemas import PROJECT_NAME_MAX, AiRequest, GameObjectIn, ProjectCreate, ProjectRename, SceneUpdate
 from .world import MAX_OBJECTS
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -116,7 +116,8 @@ def delete_project(project_id: int, repo=Depends(get_repository), owner_id: int 
 def duplicate_project(project_id: int, repo=Depends(get_repository), owner_id: int = Depends(current_owner_id)):
     """Clone a project: same scene, name with ' (copia)' appended."""
     original = load_project(project_id, repo, owner_id)
-    name = f"{original.name} (copia)"[:100]
+    suffix = " (copia)"
+    name = f"{original.name[:PROJECT_NAME_MAX - len(suffix)].rstrip()}{suffix}"
     return project_json(repo.create(owner_id, name, list(original.scene)))
 
 
